@@ -1,0 +1,140 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Referral Manager</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f4f6fb;color:#20283b;font-family:Arial,sans-serif}
+header{background:#17233d;color:white;padding:22px 6%;font-size:23px;font-weight:bold}
+main{max-width:1100px;margin:30px auto;padding:0 18px}
+h2{font-size:25px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}
+.card,.panel{background:white;padding:22px;border-radius:12px;margin-bottom:18px;box-shadow:0 3px 14px #18243b0b}
+.stat{font-size:28px;font-weight:bold;margin-top:10px}
+form{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+input{padding:12px;border:1px solid #dce1eb;border-radius:7px;flex:1;min-width:180px}
+button{padding:11px 17px;border:0;border-radius:7px;background:#365de5;color:white;cursor:pointer}
+button.delete{background:#dc4545}
+button:disabled{opacity:.5}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:13px 9px;border-bottom:1px solid #edf0f5;overflow-wrap:anywhere}
+th{color:#68738a;font-size:13px}
+a{color:#365de5}
+@media(max-width:650px){.stats{grid-template-columns:1fr}table{font-size:12px}th,td{padding:9px 4px}}
+</style>
+</head>
+<body>
+<header>🚀 Referral Manager</header>
+<main>
+<h2>Dashboard Overview</h2>
+<div class="stats">
+<div class="card">Total Websites<div class="stat" id="sites">0</div></div>
+<div class="card">Total Emails<div class="stat" id="emails">0</div></div>
+<div class="card">Total Referral Links<div class="stat" id="links">0</div></div>
+</div>
+
+<section class="panel">
+<h2>Add Referral Website</h2>
+<form id="siteForm">
+<input id="siteName" placeholder="Website name" required>
+<input id="siteUrl" type="url" placeholder="Website URL" required>
+<input id="refUrl" type="url" placeholder="Referral link" required>
+<button>Add Website</button>
+</form>
+</section>
+
+<section class="panel">
+<h2>Email Management</h2>
+<form id="emailForm">
+<input id="emailInput" type="email" placeholder="Enter email address" required>
+<button>Add Email</button>
+</form>
+<div class="toolbar">
+<input id="emailSearch" placeholder="Search emails...">
+<button id="selectAll">Select All</button>
+<button class="delete" id="deleteSelected" disabled>Delete Selected</button>
+</div>
+<table>
+<thead><tr><th>Select</th><th>Email Address</th><th>Action</th></tr></thead>
+<tbody id="emailRows"></tbody>
+</table>
+</section>
+
+<section class="panel">
+<h2>Referral Websites</h2>
+<table>
+<thead><tr><th>Website</th><th>Website URL</th><th>Referral Link</th><th>Action</th></tr></thead>
+<tbody id="siteRows"></tbody>
+</table>
+</section>
+</main>
+
+<script>
+let sites=JSON.parse(localStorage.getItem('refSites')||'[]');
+let emails=JSON.parse(localStorage.getItem('refEmails')||'[]');
+let selected=new Set();
+
+function save(){
+ localStorage.setItem('refSites',JSON.stringify(sites));
+ localStorage.setItem('refEmails',JSON.stringify(emails));
+ render();
+}
+function render(){
+ document.getElementById('sites').textContent=sites.length;
+ document.getElementById('emails').textContent=emails.length;
+ document.getElementById('links').textContent=sites.filter(s=>s.ref).length;
+
+ document.getElementById('siteRows').innerHTML=sites.map((s,i)=>`
+ <tr><td>${escapeHTML(s.name)}</td>
+ <td><a href="${escapeAttr(s.url)}" target="_blank" rel="noopener">Visit</a></td>
+ <td><a href="${escapeAttr(s.ref)}" target="_blank" rel="noopener">Open referral</a></td>
+ <td><button class="delete" onclick="removeSite(${i})">Delete</button></td></tr>
+ `).join('');
+
+ const query=document.getElementById('emailSearch').value.toLowerCase();
+ document.getElementById('emailRows').innerHTML=emails.map((e,i)=>({e,i}))
+ .filter(x=>x.e.toLowerCase().includes(query))
+ .map(x=>`<tr><td><input type="checkbox" ${selected.has(x.i)?'checked':''} onchange="toggle(${x.i},this.checked)"></td>
+ <td>${escapeHTML(x.e)}</td><td><button class="delete" onclick="removeEmail(${x.i})">Delete</button></td></tr>`).join('');
+
+ document.getElementById('deleteSelected').disabled=selected.size===0;
+}
+function escapeHTML(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeAttr(s){return escapeHTML(s);}
+function removeSite(i){sites.splice(i,1);save();}
+function removeEmail(i){emails.splice(i,1);selected.clear();save();}
+function toggle(i,checked){checked?selected.add(i):selected.delete(i);render();}
+
+document.getElementById('siteForm').onsubmit=e=>{
+ e.preventDefault();
+ sites.push({
+ name:document.getElementById('siteName').value.trim(),
+ url:document.getElementById('siteUrl').value.trim(),
+ ref:document.getElementById('refUrl').value.trim()
+ });
+ e.target.reset();save();
+};
+document.getElementById('emailForm').onsubmit=e=>{
+ e.preventDefault();
+ const email=document.getElementById('emailInput').value.trim().toLowerCase();
+ if(emails.includes(email)){alert('Email already exists!');return;}
+ emails.push(email);e.target.reset();save();
+};
+document.getElementById('emailSearch').oninput=render;
+document.getElementById('selectAll').onclick=()=>{
+ emails.forEach((_,i)=>selected.add(i));render();
+};
+document.getElementById('deleteSelected').onclick=()=>{
+ if(!selected.size)return;
+ if(!confirm('Delete selected emails?'))return;
+ emails=emails.filter((_,i)=>!selected.has(i));
+ selected.clear();save();
+};
+render();
+</script>
+</body>
+</html>
